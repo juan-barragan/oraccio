@@ -29,7 +29,7 @@ def find_solution(input_orario, teacher, time_1, time_2, max_iterations=100):
             conflicting_teacher = list(set(conflict2[0]) - set([conflicting_teacher]))[0]
             conflicting_time = conflict2[1]
 
-        free_day_hour = logic.find_next_available_slot(orario, conflicting_teacher, seen)
+        free_day_hour = logic.find_next_available_slot(orario, conflicting_teacher, seen, curricula_data.not_allowed)
         c1 = logic.classe(teacher=conflicting_teacher, day_hour=conflicting_time)
         c2 = logic.classe(teacher=conflicting_teacher, day_hour=free_day_hour)
         if not free_day_hour:
@@ -55,22 +55,40 @@ def find_solution(input_orario, teacher, time_1, time_2, max_iterations=100):
     else:
         return orario, permute_history
 
-orario_path = './data/inga_imp.csv'
+file_name = 'GIO8_VEN10.csv'
+# file_name = 'spagnolo_imp.csv'
+orario_path = f'./data/{file_name}'
+
 orario = pd.read_csv(orario_path)
 orario.set_index("teacher", inplace=True)
-# orario.to_csv(orario_path)
+
 curricula_data = curricula.curricula('./data/docente_classes.csv')
 
-conflicting_teacher = 'SOLE A.'
-conflicting_hour_1 = 'GIO8'
+# conflicting_teacher = 'SPAGNOLO  2.'
+# conflicting_hour_1 = 'GIO8'
 
-empty_slots = logic.find_all_available_slots(orario, conflicting_teacher)
+conflicting_teacher = 'CINÀ F.'
+conflicting_hour_1 = 'MAR8'
 
-for conflicting_hour_2 in ['LUN14']: #empty_slots:
+empty_slots = logic.find_all_available_slots(orario, conflicting_teacher, curricula_data.not_allowed)
+
+# empty_slots = ['VEN8', 'VEN10',	'VEN11', 'VEN12',	'VEN13',	'VEN14']
+empty_slots = ['MAR12']
+for conflicting_hour_2 in empty_slots:
     sol, history = find_solution(orario, conflicting_teacher, conflicting_hour_1, conflicting_hour_2, 200)
     if not history:
         print(conflicting_hour_2, 'no solution found')
         continue
     quality = logic.schedule_quality(sol)
+    touched_professors = {
+        p for entry in history for p, c in entry
+    }
+    
+    for p in touched_professors:
+        holes = logic.holes_by_day(sol, p)
+        print(p)
+        print(holes)
     print(f'{conflicting_hour_2}: {quality}')
-    file.dump_to_html(sol, history, f'{conflicting_hour_1}_{conflicting_hour_2}.html')
+    name = f'{conflicting_hour_1}_{conflicting_hour_2}_cina'
+    sol.to_csv(f'{name}.csv')
+    file.dump_to_html(sol, history, f'{name}.html')
