@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excel-like Table</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+
+    .table-container {
+      position: relative;
+      width: 100%;
+      height: 600px;
+      overflow: auto;
+      border: 1px solid #c0c0c0;
+      background-color: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    table {
+      border-collapse: collapse;
+      width: auto;
+      font-size: 13px;
+    }
+
+    th, td {
+      border: 1px solid #e0e0e0;
+      padding: 6px 8px;
+      text-align: left;
+      white-space: nowrap;
+      height: 21px;
+    }
+
+    /* Bold borders - clean approach */
+    /* Teacher column right border */
+    td:first-child,
+    th:first-child {
+      border-right: 3px solid #666666 !important;
+    }
+
+    /* Last column right border */
+    td:last-child,
+    #dayRow th:last-child {
+      border-right: 3px solid #666666 !important;
+    }
+
+    /* Remove any unwanted right border from LUN 8:00 (2nd column) - both data and header */
+    td:nth-child(2),
+    #hourRow th:nth-child(1) {
+      border-right: 1px solid #e0e0e0 !important;
+    }
+
+    /* Also ensure no bold borders on any hour cells except where we want them */
+    #hourRow th {
+      border-right: 1px solid #e0e0e0 !important;
+    }
+
+    /* Left borders for first hour of each day (data rows) */
+    td:nth-child(9),  /* MAR 8:00 */
+    td:nth-child(16), /* MER 8:00 */
+    td:nth-child(23), /* GIO 8:00 */
+    td:nth-child(30)  /* VEN 8:00 */ {
+      border-left: 3px solid #666666 !important;
+    }
+
+    /* Left borders for first hour of each day (hour header row) */
+    #hourRow th:nth-child(8),  /* MAR 8:00 */
+    #hourRow th:nth-child(15), /* MER 8:00 */
+    #hourRow th:nth-child(22), /* GIO 8:00 */
+    #hourRow th:nth-child(29)  /* VEN 8:00 */ {
+      border-left: 3px solid #666666 !important;
+    }
+
+    /* Add back the bold right border for the last hour header */
+    #hourRow th:last-child {
+      border-right: 3px solid #666666 !important;
+    }
+
+    th {
+      background-color: #d0d0d0;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      font-weight: 600;
+      color: #1a1a1a;
+      text-align: center;
+      border-bottom: 1px solid #c0c0c0;
+      font-size: 11px;
+      letter-spacing: 0.3px;
+      width: auto;
+    }
+
+    td:first-child {
+      position: sticky;
+      left: 0;
+      background-color: #d0d0d0;
+      z-index: 1;
+      font-weight: 600;
+      text-align: center;
+      border-right: 3px solid #666666;
+      color: #1a1a1a;
+      font-size: 11px;
+      width: auto;
+    }
+
+    th:first-child {
+      position: sticky;
+      left: 0;
+      top: 0;
+      background-color: #d0d0d0;
+      z-index: 3;
+      border-right: 3px solid #666666;
+      border-bottom: 1px solid #c0c0c0;
+    }
+
+    tbody tr:hover {
+      background-color: #e8f4f8;
+    }
+
+    tbody tr:nth-child(even) td:not(:first-child) {
+      background-color: #f8f9fa;
+    }
+
+    tbody tr:nth-child(odd) td:not(:first-child) {
+      background-color: #ffffff;
+    }
+
+    tbody td:not(:first-child) {
+      color: #202124;
+      cursor: move;
+      user-select: none;
+    }
+
+    /* Drag and drop styles */
+    .dragging {
+      opacity: 0.5;
+      background-color: #e3f2fd !important;
+      border: 2px solid #2196f3 !important;
+    }
+
+    .drag-over {
+      background-color: #fff3e0 !important;
+      border: 2px dashed #ff9800 !important;
+    }
+
+    .drop-zone {
+      background-color: #e8f5e8 !important;
+      border: 2px solid #4caf50 !important;
+    }
+
+    .drag-blocked {
+      background-color: #ffebee !important;
+      border: 2px solid #f44336 !important;
+      cursor: not-allowed !important;
+    }
+
+    /* Change tracking styles */
+    .changed-cell {
+      background-color: #fff3cd !important;
+      border-left: 4px solid #ffc107 !important;
+    }
+
+    .recently-changed {
+      background-color: #d4edda !important;
+      border-left: 4px solid #28a745 !important;
+      animation: highlight 1s ease-in-out;
+    }
+
+    @keyframes highlight {
+      0% { background-color: #28a745; }
+      100% { background-color: #d4edda; }
+    }
+
+    /* Change log panel */
+    .change-log {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 350px;
+      max-height: 400px;
+      background: white;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      font-size: 12px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .change-log-header {
+      background: #f8f9fa;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      font-weight: bold;
+      position: sticky;
+      top: 0;
+    }
+
+    .change-log-content {
+      padding: 10px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .change-entry {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+      margin-bottom: 5px;
+    }
+
+    .change-entry:last-child {
+      border-bottom: none;
+    }
+
+    .change-timestamp {
+      color: #666;
+      font-size: 10px;
+    }
+
+    .change-details {
+      margin-top: 3px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <!-- Change log panel -->
+  <div class="change-log" id="changeLog">
+    <div class="change-log-header">
+      📋 Change Log
+      <button style="float: right; background: none; border: none; cursor: pointer;" onclick="toggleChangeLog()">✕</button>
+    </div>
+    <div class="change-log-content" id="changeLogContent">
+      <p style="color: #666; text-align: center; margin-top: 20px;">No changes yet</p>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table id="excelTable">
+      <thead>
+        <tr id="dayRow">
+          <!-- Day headers will be dynamically added here -->
+        </tr>
+        <tr id="hourRow">
+          <!-- Hour headers will be dynamically added here -->
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Rows will be dynamically added here -->
+      </tbody>
+    </table>
+  </div>
+
+  <script type="text/javascript">
+    const dayRow = document.querySelector("#dayRow");
+    const hourRow = document.querySelector("#hourRow");
+    const tableBody = document.querySelector("#excelTable tbody");
+
+    // Create two-row header structure
+    const days = ["LUN", "MAR", "MER", "GIO", "VEN"];
+    const hours = ["8:00", "9:00", "10:00", "11:00", "12:00", "13:00", "14:00"];
+
+    // Generate day row header
+    if (dayRow) {
+      dayRow.innerHTML = ''; // Clear existing headers
+      
+      // Teacher column
+      const teacherDayHeader = document.createElement("th");
+      teacherDayHeader.textContent = "Teacher";
+      teacherDayHeader.rowSpan = 2;
+      dayRow.appendChild(teacherDayHeader);
+      
+      // Day headers (each spanning 7 hours)
+      days.forEach(day => {
+        const dayHeader = document.createElement("th");
+        dayHeader.textContent = day;
+        dayHeader.colSpan = 7;
+        dayRow.appendChild(dayHeader);
+      });
+    }
+
+    // Generate hour row header
+    if (hourRow) {
+      hourRow.innerHTML = ''; // Clear existing headers
+      
+      // Hour headers (repeat for each day)
+      days.forEach(() => {
+        hours.forEach(hour => {
+          const hourHeader = document.createElement("th");
+          hourHeader.textContent = hour;
+          hourRow.appendChild(hourHeader);
+        });
+      });
+    }
+
+    // Teacher schedule data from CSV
+    const data = [
+      ["ALLEGRA P.", "", "", "", "", "", "", "", "", "", "", "", "", "3H", "", "1E", "1E", "3H", "3H", "", "", "", "1E", "5I", "5I", "", "", "", "", "5I", "", "", "", "", "", "", "9"],
+      ["ANSELMO A.", "", "", "1B", "5B", "3B", "", "", "", "", "", "", "", "3B", "5B", "", "1M", "1B", "1B", "4B", "", "", "1M", "2B", "2B", "", "4B", "", "5B", "2B", "1M", "3B", "4B", "", "", "", "18"],
+      ["ARMETTA R.", "", "", "", "", "2C", "1G", "", "", "", "", "1C", "1D", "1D", "1C", "", "", "", "1F", "1F", "", "", "", "1G", "2G", "2G", "1E", "1E", "2F", "2E", "2E", "2F", "2C", "", "", "", "18"],
+      ["BARBO F.", "", "4I", "5I", "", "", "", "", "4I", "4I", "5I", "5I", "", "", "", "2I", "2I", "5I", "", "4I", "4I", "", "2I", "2I", "", "", "5I", "5I", "4I", "", "2I", "2I", "", "", "", "", "18"],
+      ["BASILE D.", "", "", "", "", "2I", "4B", "", "", "", "", "", "5I", "5I", "4F", "2B", "", "", "2B", "3B", "3B", "2I", "", "", "1B", "1B", "4I", "1I", "1I", "4B", "", "5B", "5B", "4F", "4I", "", "20"],
+      ["BONAFFINI S.", "", "", "", "", "", "5A", "", "", "", "", "", "", "", "", "4I", "4I", "5A", "5A", "", "", "", "4I", "", "", "", "", "", "", "", "", "", "", "", "", "", "6"],
+      ["BONANNO A.", "", "3H", "", "", "", "", "", "3H", "3H", "", "", "", "", "", "5L", "5L", "", "", "", "", "", "5L", "", "", "", "", "", "", "1H", "2H", "2H", "", "", "1H", "", "10"],
+      ["BONDI G.", "", "", "", "", "", "", "", "", "", "", "2E", "", "", "", "4E", "4E", "", "3E", "3E", "1E", "", "5E", "4E", "3E", "", "", "", "", "5E", "5E", "1E", "2E", "", "", "", "13"],
+      ["BONURA A.", "1M", "1M", "", "1L", "2L", "1L", "", "1M", "1M", "1L", "", "", "", "", "2L", "2L", "5L", "5L", "", "", "", "", "5L", "3L", "", "", "1L", "3L", "3L", "2L", "", "", "", "", "", "18"],
+      ["BUA M.", "", "", "", "2G", "2B", "2C", "", "1A", "", "", "2D", "2C", "2B", "2A", "", "", "", "2A", "", "2G", "", "", "", "", "1C", "1B", "1A", "2D", "1B", "1D", "1D", "1C", "", "", "", "18"],
+      ["BUCCHERI C.", "", "", "", "5I", "1M", "2D", "", "", "", "", "", "2D", "4H", "4H", "", "", "", "5I", "2B", "1B", "", "4H", "", "2F", "5I", "1F", "1M", "", "", "1F", "2F", "2B", "", "1B", "", "18"],
+      ["CALLIVA R.", "4F", "4F", "", "", "", "", "", "", "4F", "5F", "5F", "", "", "", "1F", "1F", "4F", "", "5F", "5F", "", "1F", "1F", "", "5F", "4F", "4F", "", "", "", "1F", "1F", "", "5F", "", "18"],
+      ["CAMMALLERI F.", "", "", "", "", "", "5F", "", "2F", "2F", "", "", "", "", "", "", "", "1M", "2F", "", "", "", "5F", "", "1I", "1I", "5F", "", "2F", "", "", "", "", "", "1M", "", "11"],
+      ["CAMMARATA C.", "", "", "", "", "", "5L", "", "", "", "", "", "5L", "3L", "3L", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "4"],
+      ["CAVADI A.", "", "", "", "", "1B", "1C", "", "", "", "", "1E", "1F", "1G", "1E", "1G", "", "1L", "", "", "", "", "", "", "1L", "1A", "1D", "1D", "1H", "1A", "", "1C", "1B", "1H", "1F", "", "18"],
+      ["CELESTRI R.", "", "", "3A", "", "", "", "", "3A", "", "3A", "", "", "", "", "4A", "4A", "", "", "", "", "", "4A", "", "", "", "", "", "", "", "", "", "", "", "", "", "6"],
+      ["CERNIGLIARO M.", "", "2A", "4A", "4A", "1A", "3A", "", "", "3A", "4A", "", "", "2A", "3A", "5A", "", "3A", "4A", "5A", "", "", "5A", "5A", "1A", "2F", "", "", "", "", "2F", "", "", "", "", "", "18"],
+      ["CINA F.", "", "", "4D", "4D", "3D", "", "", "5D", "5D", "4D", "4D", "3D", "", "", "3D", "3D", "", "5D", "4D", "4D", "", "", "", "", "", "", "5D", "5D", "", "", "3D", "", "5D", "3D", "", "18"],
+      ["CIOFALO M.", "3C", "", "1C", "1C", "4E", "5E", "", "5C", "3C", "1C", "", "", "", "", "5C", "5C", "5E", "", "3C", "", "", "", "5E", "", "3E", "", "", "", "3E", "3E", "4E", "4E", "", "", "", "18"],
+      ["COLLETTO L.", "", "", "", "", "2A", "2B", "2L", "", "", "", "", "2B", "2H", "1H", "", "", "", "", "1L", "1L", "", "", "2D", "2A", "1H", "1B", "1B", "2D", "2L", "", "2H", "1A", "1A", "", "", "18"],
+      ["COLOMBINO E.", "", "", "", "2H", "2E", "2E", "1L", "", "", "", "", "2F", "2F", "2H", "", "", "", "", "1H", "2L", "", "", "", "1H", "1G", "1F", "1F", "1E", "1E", "1G", "1L", "2L", "", "", "", "18"],
+      ["COTILLUZZO R.", "2C", "3C", "", "", "", "", "", "1C", "1C", "2C", "2C", "", "", "", "", "", "5C", "5C", "1C", "", "", "5C", "4C", "", "2C", "1C", "", "", "3C", "3C", "4C", "4C", "", "", "", "17"],
+      ["CUSIMANO M.", "2G", "2G", "2L", "2L", "1L", "", "", "2G", "2G", "2L", "", "", "", "", "1L", "1L", "", "", "", "", "", "1L", "1L", "", "2L", "2L", "", "", "2G", "", "1L", "2G", "", "2L", "", "18"],
+      ["D'ANGELO M.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "2I", "2I", "", "", "", "", "1I", "1M", "1M", "1I", "", "", "6"],
+      ["D'ELIA M.", "3G", "3G", "4G", "4G", "5G", "", "", "3G", "", "4G", "4G", "5G", "", "", "5G", "5G", "", "", "", "", "", "5G", "5G", "", "", "3G", "4G", "4G", "", "", "", "3G", "3G", "", "", "18"],
+      ["DALIA S.", "3H", "3B", "", "", "5B", "3E", "5E", "", "", "", "", "3E", "4E", "4E", "4B", "3E", "3E", "", "4H", "3H", "", "", "", "4B", "5E", "4E", "4E", "3E", "", "3B", "4H", "5H", "5H", "5B", "", "23"],
+      ["DI CARLO E.", "", "", "4B", "4B", "1F", "3B", "", "", "", "4B", "4B", "3B", "1F", "1B", "5B", "5B", "", "", "", "", "", "5B", "5B", "", "3B", "2B", "2B", "", "", "", "", "1B", "3B", "", "", "18"],
+      ["DI PIAZZA M.", "4E", "4E", "3E", "3E", "", "", "", "4E", "4E", "3E", "3E", "3L", "", "", "3L", "3L", "", "", "4E", "4E", "", "3L", "3L", "", "", "", "", "", "", "", "", "3E", "3E", "", "", "17"],
+      ["DRAGO R.", "", "4D", "5D", "5F", "", "1D", "", "4D", "1D", "5D", "5D", "5F", "", "", "", "", "3D", "3D", "", "", "", "4D", "4D", "3D", "3D", "", "", "", "5F", "5F", "5D", "", "", "", "", "18"],
+      ["FARINA T.", "4I", "5B", "", "", "", "", "", "5B", "3B", "", "", "3A", "5B", "5I", "", "", "", "3B", "5I", "4B", "", "", "", "", "", "5A", "4I", "3A", "5B", "", "4A", "4A", "4B", "5A", "", "18"],
+      ["FARSETTA M.", "", "2C", "1M", "1M", "1C", "", "", "2C", "2C", "1M", "1M", "1C", "", "", "1C", "1C", "", "", "", "", "", "1C", "1C", "", "", "1M", "2C", "2C", "", "", "", "1M", "2C", "", "", "18"],
+      ["FOLLONE M.", "1C", "", "3C", "3C", "4C", "5C", "", "4C", "", "", "", "", "", "", "1A", "1A", "1C", "1C", "", "", "", "1A", "2C", "2C", "", "", "", "", "2C", "4C", "5C", "5C", "", "3C", "", "18"],
+      ["FRANCO G.", "1H", "1H", "", "", "2H", "4H", "", "1H", "1H", "2H", "2H", "", "", "", "5H", "5H", "4H", "4H", "2H", "", "", "5H", "", "3H", "3H", "", "", "", "", "", "", "", "", "3H", "", "17"],
+      ["FRISINA M.C.", "5C", "1C", "4C", "", "", "", "", "", "5C", "4C", "4C", "2H", "2C", "", "3C", "3C", "", "", "", "", "", "3C", "3C", "1C", "", "4C", "2H", "", "", "", "2C", "5C", "5C", "", "", "18"],
+      ["GAETANI C.", "4B", "4B", "3B", "3B", "", "", "", "4B", "", "3B", "3B", "5B", "", "4B", "", "", "5B", "5B", "", "", "", "", "5B", "5B", "3B", "4B", "3B", "", "", "", "", "4B", "", "", "", "17"],
+      ["GAGLIARDO E.", "4C", "4C", "", "", "", "", "", "3C", "4C", "5C", "5C", "", "", "", "", "", "", "3C", "4C", "5C", "", "", "5C", "3C", "3C", "5C", "", "4C", "4C", "5C", "", "3C", "3C", "", "", "18"],
+      ["GALLO A.", "5A", "3A", "5H", "", "1H", "2A", "", "", "", "4H", "5A", "5H", "1H", "3H", "", "", "1A", "", "1A", "2H", "", "", "", "", "4A", "2H", "3H", "3H", "", "4A", "", "4H", "3A", "2A", "", "21"],
+      ["GAMBINO F.", "3E", "3E", "4E", "4E", "", "1A", "", "3E", "3E", "4E", "4E", "", "", "", "2E", "2E", "", "", "", "", "", "2E", "1A", "5A", "5L", "", "", "1A", "5L", "5L", "5A", "5A", "", "", "", "20"],
+      ["GIAMBALVO M.", "", "1D", "1L", "3D", "5D", "4D", "", "", "", "5L", "2L", "4D", "2D", "1L", "", "", "", "", "5D", "5L", "", "", "2L", "", "2D", "3D", "3L", "3L", "1L", "1L", "", "", "1D", "", "", "20"],
+      ["GIAMMANCO N.", "1F", "1F", "", "", "", "", "", "1F", "1F", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "4"],
+      ["GIUNTA A.", "", "", "", "", "", "", "", "", "", "", "", "", "", "3E", "", "", "2E", "2E", "", "5E", "", "4E", "2E", "5E", "", "", "", "", "4E", "4E", "3E", "3E", "5E", "", "", "12"],
+      ["GRAFFAGNINO G.", "5I", "", "4I", "4I", "1I", "", "1I", "5I", "5I", "4I", "4I", "", "", "", "4F", "4F", "3F", "3F", "", "5I", "", "4F", "4F", "3F", "3F", "", "", "", "", "", "", "", "", "", "", "18"],
+      ["GUARCELLO M.", "3D", "", "1F", "", "5F", "2F", "", "3F", "3D", "1F", "2F", "", "4F", "", "3F", "3F", "", "", "", "", "", "3D", "5F", "4F", "4F", "", "", "", "", "", "5F", "1F", "2F", "", "", "18"],
+      ["IANNOTTA D.", "1L", "1L", "3L", "3L", "", "", "", "", "", "3L", "", "", "", "", "", "", "5H", "5H", "5L", "2L", "", "2L", "5H", "4H", "4H", "", "", "", "4H", "", "5L", "5L", "", "1L", "", "17"],
+      ["IANNOTTA D.+ROBERSON C.", "", "", "", "", "", "", "", "", "", "", "", "2L", "1L", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "2"],
+      ["IMMESI M.", "", "", "5F", "3A", "", "4F", "", "5A", "5A", "", "", "4A", "4A", "5F", "", "", "", "", "4A", "5A", "", "3F", "3F", "5F", "3A", "", "", "", "3A", "3F", "4F", "4F", "", "", "", "18"],
+      ["INGA A.", "", "", "", "", "", "1M", "", "", "", "", "", "1M", "", "2C", "", "", "", "", "2C", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "4"],
+      ["IRACI S.", "", "", "", "", "", "1I", "", "", "", "", "", "2I", "1M", "1M", "", "", "", "", "1I", "", "", "", "", "", "", "", "", "", "", "", "", "2I", "", "", "", "6"],
+      ["LAGUARDIA E.", "", "", "2F", "2F", "", "5I", "", "", "", "2F", "1F", "3F", "3F", "4I", "", "", "1F", "1F", "4F", "4F", "", "", "", "", "", "", "5F", "5I", "", "", "5F", "", "4I", "", "", "16"],
+      ["LI MULI L.", "", "", "", "", "", "2G", "", "", "", "", "", "", "1G", "", "1G", "2G", "2G", "5G", "", "", "1G", "", "1M", "1M", "5G", "", "", "1M", "", "", "", "", "", "", "", "11"],
+      ["LO CICERO I", "5H", "", "", "", "", "", "", "", "", "", "3L", "", "", "", "2C", "2C", "3L", "3L", "", "", "", "2C", "4H", "5H", "5H", "3H", "", "", "", "3H", "3H", "", "4H", "4H", "", "15"],
+      ["LO PICCOLO D.", "", "", "1I", "1I", "5A", "2I", "", "", "", "", "", "", "", "", "2A", "5A", "4A", "", "", "", "", "2A", "2A", "3A", "", "4A", "", "4A", "5A", "3A", "3A", "1I", "2I", "", "", "17"],
+      ["LO PICCOLO D.+ROBERSON C.", "", "", "", "", "", "", "", "", "", "", "", "", "", "1I", "", "", "", "", "", "", "", "", "", "", "2I", "", "", "", "", "", "", "", "", "", "", "2"],
+      ["LUCIDO M.", "2I", "2I", "2C", "", "3C", "4C", "", "", "", "1I", "1I", "5C", "5C", "3C", "", "", "2C", "2C", "2I", "1C", "", "", "", "", "", "", "4C", "", "1C", "1C", "1I", "", "", "", "", "18"],
+      ["LUFT S.", "3B", "", "5B", "1B", "", "5B", "", "", "5B", "1B", "1B", "4C", "4C", "", "", "3B", "4B", "4B", "", "", "", "3B", "4B", "4C", "2B", "", "", "", "", "2B", "2B", "", "", "", "", "18"],
+      ["MACCATAIO S.", "2E", "2E", "1E", "1E", "", "4E", "", "2E", "2E", "1E", "", "5E", "", "", "", "", "", "", "1E", "3E", "", "", "", "", "3E", "3E", "", "", "", "5E", "5E", "4E", "4E", "", "", "17"],
+      ["MANNINO P.", "5B", "3F", "", "", "4F", "3F", "", "5F", "", "5B", "5B", "", "4B", "3B", "5F", "4B", "5F", "", "", "", "", "4B", "3B", "3B", "", "", "", "", "4F", "4F", "", "", "", "", "", "17"],
+      ["MANNO T.", "5G", "5G", "3H", "3H", "2G", "", "", "5G", "5G", "3H", "3H", "2G", "", "", "4G", "4G", "3G", "3G", "", "1M", "", "4G", "4G", "3G", "3G", "", "", "1M", "1G", "1G", "", "", "", "", "", "22"],
+      ["MARTORANA R.", "", "", "", "", "5C", "5G", "4E", "", "3G", "3G", "", "4E", "4G", "5C", "", "", "4C", "5E", "5E", "3C", "", "", "", "", "4G", "3C", "5G", "5E", "", "", "", "", "4C", "4C", "", "18"],
+      ["MENDOLA F.", "", "1G", "", "", "", "", "", "1G", "1G", "2G", "2G", "", "", "", "3G", "3G", "4G", "4G", "2G", "", "", "", "3G", "4G", "5G", "", "", "", "5G", "5G", "", "", "1G", "2G", "", "17"],
+      ["MESSINA R.", "1A", "1A", "2A", "2A", "", "", "", "", "1A", "2A", "2A", "", "1I", "1A", "1I", "1I", "", "1A", "2A", "1A", "", "1I", "1I", "2A", "", "", "", "", "", "", "", "", "1I", "", "", "18"],
+      ["MILITELLO G.", "5L", "5L", "1H", "1H", "", "2H", "", "5L", "5L", "1H", "1H", "", "", "", "2H", "2H", "", "", "", "", "", "2H", "2H", "1H", "", "5L", "1H", "", "", "", "", "2H", "5L", "", "", "18"],
+      ["MINAFO M.", "1I", "1I", "2I", "2I", "", "", "", "1I", "1I", "2I", "", "4I", "", "3F", "5I", "5I", "4I", "4I", "", "", "", "", "", "", "", "", "2I", "3F", "5I", "3F", "", "", "", "", "", "17"],
+      ["MINGRINO C.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "1H", "1H", "", "", "", "", "", "1H", "", "", "", "", "", "", "", "", "", "", "", "", "", "3"],
+      ["MONTALBANO B.", "2F", "5F", "", "", "1E", "1F", "3E", "", "", "", "", "2E", "2E", "1F", "", "", "", "", "3F", "3F", "", "", "", "", "", "1E", "2F", "4E", "", "", "", "", "5F", "5E", "", "15"],
+      ["MONTELEONE O.", "4A", "4A", "5A", "5A", "", "", "", "4A", "4A", "5A", "3A", "", "3A", "", "3A", "3A", "", "", "", "", "", "3A", "3A", "", "5A", "", "4A", "5A", "", "", "", "", "5A", "4A", "", "18"],
+      ["MONTEROSSO R.", "1D", "", "2D", "2D", "1D", "3D", "", "", "", "", "", "", "", "2D", "5D", "5D", "4D", "", "", "", "", "5D", "1D", "4D", "4D", "", "", "", "3D", "3D", "", "1D", "2D", "", "", "17"],
+      ["MOSCA M.", "2H", "2H", "4F", "", "", "", "", "", "3F", "", "4F", "4F", "", "2F", "", "", "1H", "2H", "2F", "2F", "", "", "", "1F", "1F", "", "", "", "1F", "1H", "1H", "3F", "3F", "", "", "18"],
+      ["MURATORE D.", "", "", "1A", "1A", "4A", "", "", "2A", "2A", "1A", "1A", "5A", "", "", "", "", "", "3A", "", "", "", "", "", "4A", "", "", "5A", "2A", "4A", "5A", "2A", "3A", "", "3A", "", "17"],
+      ["NICCHITTA D.", "2L", "2L", "", "", "", "", "", "1L", "1L", "", "", "", "", "", "", "2A", "1E", "2L", "1L", "2A", "", "", "1E", "2E", "2E", "1A", "2A", "", "2E", "1A", "1A", "1E", "", "", "", "18"],
+      ["NICOSIA M.", "", "", "3G", "5G", "4I", "3G", "", "", "", "", "", "", "", "", "2G", "2G", "1G", "1G", "4G", "", "", "2G", "1G", "5G", "", "4G", "", "5G", "4I", "4I", "3G", "", "4G", "", "", "18"],
+      ["ORLANDO E.", "", "", "", "3G", "", "", "", "4G", "4G", "5G", "5G", "1G", "", "", "", "", "5G", "1M", "1M", "3G", "", "3G", "1M", "2G", "1G", "", "", "", "4G", "2G", "2G", "1G", "", "", "", "18"],
+      ["PALUMBO D.", "4G", "", "", "", "", "", "", "3B", "4B", "", "3G", "", "5G", "5G", "", "", "", "5G", "5B", "5B", "", "", "", "", "4B", "5B", "3B", "3G", "3G", "4B", "4G", "4G", "3B", "", "", "18"],
+      ["PASSARO G.", "5E", "5E", "", "", "", "", "", "5E", "5E", "", "4A", "", "4D", "", "", "", "2A", "1E", "3A", "3A", "", "", "4A", "1E", "1E", "3A", "", "", "2A", "2A", "4D", "4D", "4A", "", "", "19"],
+      ["PATERNO A.", "", "", "5E", "5E", "", "1E", "", "", "", "5E", "5E", "1E", "3E", "2E", "3E", "", "4E", "4E", "", "2D", "", "3E", "3E", "4E", "4E", "", "2E", "", "", "", "", "", "2D", "", "", "18"],
+      ["PEDONE P.", "2A", "5H", "", "", "5H", "3L", "3L", "", "", "", "", "1A", "1A", "1D", "", "", "2L", "1D", "2L", "2C", "3L", "", "", "", "", "2C", "1C", "1C", "", "", "5H", "2L", "2A", "1C", "", "20"],
+      ["POLIZZOTTO L.", "5D", "4G", "3D", "5D", "3G", "", "", "", "", "", "", "", "3D", "4D", "1D", "1D", "2D", "2D", "", "", "", "1D", "2D", "", "", "4D", "3G", "5L", "", "", "", "", "5L", "4G", "", "18"],
+      ["RACCUGLIA A", "1B", "1B", "2B", "2B", "4B", "", "", "", "1B", "2B", "2B", "4B", "1B", "", "", "", "3B", "", "", "", "", "", "", "", "", "5B", "", "3B", "5B", "4B", "3B", "5B", "", "", "", "17"],
+      ["RANDAZZO R.", "", "", "", "", "", "", "", "4F", "", "4F", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "4F", "", "", "", "", "", "", "", "", "3"],
+      ["RAPPA L.", "", "", "", "", "", "", "", "", "", "", "", "", "", "5D", "", "", "", "", "5C", "5D", "", "", "5D", "5C", "5C", "", "4D", "4D", "", "", "", "", "4D", "", "", "9"],
+      ["RICCIARDI G.", "", "", "", "", "4H", "1H", "", "5H", "5H", "", "", "", "", "", "4H", "4H", "", "", "1H", "5H", "", "", "", "", "", "", "", "4H", "5H", "", "", "", "", "", "", "10"],
+      ["RICCOBONO A.", "1E", "1E", "2E", "2E", "5E", "", "", "1E", "1E", "", "", "", "5E", "5E", "5E", "5E", "", "", "2E", "2E", "", "", "", "", "", "2E", "5E", "2E", "", "", "", "", "1E", "1E", "", "18"],
+      ["RINCIARI R.", "", "", "", "", "4G", "4G", "", "", "", "", "", "3G", "3G", "2G", "", "", "2I", "2I", "3G", "5G", "1I", "", "", "", "", "1I", "1G", "1G", "2I", "4G", "5G", "5G", "2G", "", "", "18"],
+      ["RISO R.", "3A", "5A", "", "", "", "", "", "", "", "", "", "1L", "2L", "4A", "", "", "", "", "3H", "4H", "", "", "", "", "", "2A", "5L", "2H", "", "", "", "1A", "3L", "5H", "", "13"],
+      ["ROBERSON C.", "", "", "", "", "3L", "", "", "", "", "", "", "", "", "2L", "", "", "", "", "", "1I", "", "", "", "", "", "", "", "", "", "", "3L", "3L", "1L", "2I", "", "7"],
+      ["SAELI A.", "3L", "3L", "5L", "5L", "", "2L", "", "3L", "3L", "", "5L", "", "2I", "5L", "", "", "", "", "", "2I", "", "", "", "", "", "1L", "1L", "", "2L", "", "", "", "", "", "", "14"],
+      ["SAMPINO I.", "5F", "", "", "", "", "", "", "1D", "4D", "2D", "", "", "", "", "4D", "5F", "1D", "5F", "", "3D", "", "", "", "5D", "5D", "", "3D", "1D", "5D", "4D", "2D", "2D", "3D", "", "", "18"],
+      ["SANSONE T.", "4D", "5D", "4H", "4F", "3F", "", "", "3D", "", "", "4H", "3H", "5F", "3D", "", "", "", "4F", "5H", "", "", "", "", "", "", "3F", "5H", "5F", "", "", "", "", "4D", "5D", "", "17"],
+      ["SCAGLIONE C.", "", "", "", "4H", "5I", "4I", "2I", "2I", "2I", "", "", "4H", "5H", "5H", "", "", "1I", "1I", "", "", "", "", "", "4I", "4I", "5H", "", "", "1I", "4H", "5I", "5I", "", "", "", "18"],
+      ["SCAMBIA P.", "3F", "5I", "5G", "1F", "", "", "", "1B", "5F", "", "", "1H", "4I", "4G", "3B", "2B", "2F", "", "1G", "4G", "", "", "", "", "", "", "2G", "4B", "", "", "", "3G", "2B", "4F", "", "19"],
+      ["SOLE A.", "", "", "1G", "1G", "", "", "", "", "", "1G", "1G", "", "", "", "", "", "", "", "", "1G", "", "", "", "", "", "", "", "", "", "", "", "", "1G", "", "", "6"],
+      ["SORCI A.", "", "", "", "5C", "3E", "", "", "", "", "2E", "2I", "1I", "1E", "2I", "1M", "2D", "", "", "1D", "1D", "", "", "3D", "", "4C", "5E", "2I", "3C", "4D", "2C", "", "5D", "1C", "2E", "", "21"],
+      ["SPAGNOLO  2.", "2D", "3D", "", "", "", "", "", "", "", "3D", "", "", "", "", "2D", "", "", "", "", "", "", "", "", "1D", "1D", "", "", "3D", "1D", "2D", "", "", "", "", "", "9"],
+      ["SPINNATO N.", "", "", "", "", "", "", "", "2L", "2L", "", "1L", "", "5D", "", "", "", "5D", "1L", "3L", "3L", "", "5I", "4I", "2L", "1L", "3L", "", "", "", "5D", "4I", "4I", "5I", "5I", "", "18"],
+      ["STORNAIUOLO L.", "", "", "", "", "5L", "3H", "", "2H", "2H", "", "3C", "3C", "5L", "", "", "4C", "2H", "4C", "", "", "", "4C", "5L", "3L", "", "", "", "", "", "", "3C", "3H", "3H", "3L", "3L", "18"],
+      ["SUCATO V.", "", "", "", "", "3A", "4A", "", "", "", "", "", "", "5A", "5A", "", "", "2B", "1H", "1B", "4A", "", "2B", "1H", "2H", "2H", "", "3A", "", "2H", "1B", "1B", "1H", "", "2B", "", "18"],
+      ["TANTILLO A.", "4H", "4H", "", "5H", "3H", "5H", "", "4H", "4H", "5H", "5H", "", "", "", "3H", "3H", "", "", "", "", "", "3H", "3H", "", "", "4H", "4H", "5H", "3H", "5H", "", "", "", "", "", "18"],
+      ["TERMINE G.", "", "2D", "1D", "1D", "2D", "1B", "", "2D", "2D", "1D", "1D", "1B", "", "", "1B", "1B", "", "", "", "", "", "1B", "1B", "", "", "2D", "2D", "", "", "", "", "", "1D", "", "", "17"],
+      ["TUMMINELLO A.", "", "", "5C", "4C", "4D", "5D", "", "", "", "3C", "3D", "5D", "3C", "4C", "4C", "4D", "3C", "4D", "3D", "", "", "", "", "", "", "5D", "5C", "5C", "", "", "", "3D", "", "", "", "18"],
+      ["VALGUARNERA S.", "1G", "5C", "2G", "", "1G", "3C", "", "", "", "", "", "4G", "1C", "3G", "", "", "", "", "", "4C", "", "", "", "", "", "", "3C", "2G", "5C", "3G", "", "", "5G", "5G", "", "15"],
+      ["VENEZIA M.", "", "2F", "2H", "2C", "", "", "", "", "", "", "", "2A", "2G", "2B", "", "", "", "", "2D", "2B", "", "2D", "2G", "", "", "2F", "2L", "2L", "", "", "2C", "2A", "2E", "2H", "", "17"],
+      ["ZAGONE P.", "2B", "2B", "3F", "3F", "2F", "", "", "2B", "2B", "3F", "3F", "", "", "", "2F", "2F", "", "", "", "", "", "2F", "2F", "", "", "", "3F", "2B", "", "", "", "2F", "3F", "", "", "17"]
+    ];
+
+    // Change tracking
+    let originalData = JSON.parse(JSON.stringify(data)); // Deep copy for comparison
+    let changeLog = [];
+    let changeCounter = 0;
+
+    // Utility functions for change tracking
+    function getCellPosition(cell) {
+      const row = cell.closest('tr');
+      const rowIndex = Array.from(row.parentNode.children).indexOf(row);
+      const cellIndex = Array.from(row.children).indexOf(cell);
+      const teacherName = row.children[0].textContent;
+      
+      // Get day and time from headers
+      const timeHeaders = document.querySelectorAll('#hourRow th');
+      const dayHeaders = document.querySelectorAll('#dayRow th');
+      
+      let timeSlot = '';
+      let day = '';
+      
+      // Calculate time slot based on cell position
+      if (cellIndex > 0) {
+        // Adjust for 0-based indexing of hour headers (cellIndex-1 because first column is teacher)
+        const hourIndex = (cellIndex - 1) % 7; // 7 hours per day
+        if (hourIndex >= 0 && hourIndex < hours.length) {
+          timeSlot = hours[hourIndex];
+        }
+      }
+      
+      // Find which day this column belongs to
+      let dayIndex = 0;
+      if (cellIndex >= 1 && cellIndex <= 7) dayIndex = 1; // LUN
+      else if (cellIndex >= 8 && cellIndex <= 14) dayIndex = 2; // MAR
+      else if (cellIndex >= 15 && cellIndex <= 21) dayIndex = 3; // MER
+      else if (cellIndex >= 22 && cellIndex <= 28) dayIndex = 4; // GIO
+      else if (cellIndex >= 29 && cellIndex <= 35) dayIndex = 5; // VEN
+      
+      if (dayIndex > 0 && dayIndex < dayHeaders.length) {
+        day = dayHeaders[dayIndex].textContent;
+      }
+      
+      return {
+        teacher: teacherName,
+        day: day,
+        time: timeSlot,
+        rowIndex: rowIndex,
+        cellIndex: cellIndex
+      };
+    }
+
+    function logChange(fromCell, toCell, oldValue, newValue) {
+      const fromPos = getCellPosition(fromCell);
+      const toPos = getCellPosition(toCell);
+      const timestamp = new Date().toLocaleTimeString();
+      
+      const change = {
+        id: ++changeCounter,
+        timestamp: timestamp,
+        type: 'swap',
+        from: {
+          position: fromPos,
+          value: oldValue
+        },
+        to: {
+          position: toPos,
+          value: newValue
+        }
+      };
+      
+      changeLog.push(change);
+      updateChangeLogDisplay();
+      
+      // Mark cells as changed
+      fromCell.classList.add('changed-cell');
+      toCell.classList.add('changed-cell');
+      
+      // Add recent change highlight
+      fromCell.classList.add('recently-changed');
+      toCell.classList.add('recently-changed');
+      
+      setTimeout(() => {
+        fromCell.classList.remove('recently-changed');
+        toCell.classList.remove('recently-changed');
+      }, 2000);
+    }
+
+    function updateChangeLogDisplay() {
+      const content = document.getElementById('changeLogContent');
+      if (changeLog.length === 0) {
+        content.innerHTML = '<p style="color: #666; text-align: center; margin-top: 20px;">No changes yet</p>';
+        return;
+      }
+      
+      content.innerHTML = changeLog.slice(-20).reverse().map(change => `
+        <div class="change-entry">
+          <div class="change-timestamp">${change.timestamp} - Change #${change.id}</div>
+          <div class="change-details">
+            <strong>Swapped:</strong><br>
+            📍 ${change.from.position.teacher} (${change.from.position.day} ${change.from.position.time}): 
+            "${change.from.value}" → "${change.to.value}"<br>
+            📍 ${change.to.position.teacher} (${change.to.position.day} ${change.to.position.time}): 
+            "${change.to.value}" → "${change.from.value}"
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Control functions
+    function toggleChangeLog() {
+      const log = document.getElementById('changeLog');
+      log.style.display = log.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function clearChanges() {
+      changeLog = [];
+      changeCounter = 0;
+      document.querySelectorAll('.changed-cell').forEach(cell => {
+        cell.classList.remove('changed-cell');
+      });
+      updateChangeLogDisplay();
+      alert('Change tracking cleared!');
+    }
+
+    function exportChanges() {
+      const dataStr = JSON.stringify(changeLog, null, 2);
+      const dataBlob = new Blob([dataStr], {type: 'application/json'});
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `table_changes_${new Date().toISOString().slice(0,10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function resetTable() {
+      if (confirm('Are you sure you want to reset the table to its original state? This will undo all changes.')) {
+        // Clear the table body
+        const tableBody = document.querySelector("#excelTable tbody");
+        tableBody.innerHTML = '';
+        
+        // Repopulate with original data
+        populateTable(originalData);
+        
+        // Clear change tracking
+        clearChanges();
+        alert('Table reset to original state!');
+      }
+    }
+
+    // Drag and drop functionality
+    let draggedElement = null;
+
+    function handleDragStart(e) {
+      draggedElement = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', this.outerHTML);
+    }
+
+    function handleDragEnd(e) {
+      this.classList.remove('dragging');
+      draggedElement = null;
+    }
+
+    function handleDragOver(e) {
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+      
+      // Only allow drop if the target cell is empty
+      if (this.textContent.trim() === "") {
+        e.dataTransfer.dropEffect = 'move';
+      } else {
+        e.dataTransfer.dropEffect = 'none';
+      }
+      return false;
+    }
+
+    function handleDragEnter(e) {
+      // Only show drag-over visual feedback for empty cells
+      if (this.textContent.trim() === "") {
+        this.classList.add('drag-over');
+      } else {
+        this.classList.add('drag-blocked');
+      }
+    }
+
+    function handleDragLeave(e) {
+      this.classList.remove('drag-over');
+      this.classList.remove('drag-blocked');
+    }
+
+    function handleDrop(e) {
+      if (e.stopPropagation) {
+        e.stopPropagation();
+      }
+
+      this.classList.remove('drag-over');
+      this.classList.remove('drag-blocked');
+
+      // Only allow drop if target cell is empty
+      if (this.textContent.trim() !== "") {
+        return false;
+      }
+
+      if (draggedElement !== this) {
+        // Store the original values
+        const draggedValue = draggedElement.textContent;
+        const targetValue = this.textContent; // Will be empty
+
+        // Log the change BEFORE making it
+        logChange(draggedElement, this, draggedValue, targetValue);
+
+        // Move the content (not swap, since target is empty)
+        this.textContent = draggedValue;
+        draggedElement.textContent = "";
+
+        // Update draggable attributes for the new cell
+        this.draggable = true;
+        this.classList.add('draggable-cell');
+        this.addEventListener('dragstart', handleDragStart);
+        this.addEventListener('dragend', handleDragEnd);
+
+        // Remove draggable from the source cell (now empty)
+        draggedElement.draggable = false;
+        draggedElement.classList.remove('draggable-cell');
+        draggedElement.removeEventListener('dragstart', handleDragStart);
+        draggedElement.removeEventListener('dragend', handleDragEnd);
+
+        // Visual feedback
+        this.classList.add('drop-zone');
+        setTimeout(() => {
+          this.classList.remove('drop-zone');
+        }, 300);
+      }
+
+      return false;
+    }
+
+    // Table population function
+    function populateTable(tableData) {
+      const tableBody = document.querySelector("#excelTable tbody");
+      
+      tableData.forEach(rowData => {
+        const row = document.createElement("tr");
+        // Remove the last column (Weekly_Total) from each row
+        const rowWithoutTotal = rowData.slice(0, -1);
+        rowWithoutTotal.forEach((cellData, index) => {
+          const cell = document.createElement("td");
+          cell.textContent = cellData;
+          
+          // Make data cells (not first column) draggable and droppable
+          if (index > 0 && cellData.trim() !== "") {
+            cell.draggable = true;
+            cell.classList.add('draggable-cell');
+            
+            // Add drag event listeners
+            cell.addEventListener('dragstart', handleDragStart);
+            cell.addEventListener('dragend', handleDragEnd);
+          }
+          
+          // Make all cells droppable (except first column)
+          if (index > 0) {
+            cell.addEventListener('dragover', handleDragOver);
+            cell.addEventListener('drop', handleDrop);
+            cell.addEventListener('dragenter', handleDragEnter);
+            cell.addEventListener('dragleave', handleDragLeave);
+          }
+          
+          row.appendChild(cell);
+        });
+        tableBody.appendChild(row);
+      });
+    }
+
+    // Populate table rows
+    if (tableBody) {
+      populateTable(data);
+    }
+  </script>
+</body>
+</html>
